@@ -1,0 +1,55 @@
+service: python-beginners-admin-bot
+
+provider:
+  name: aws
+  runtime: python3.8
+  region: eu-north-1
+  tracing:
+    apiGateway: true
+    lambda: true
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - xray:PutTraceSegments
+        - xray:PutTelemetryRecords
+      Resource: "*"
+
+package:
+  exclude:
+    - venv/**
+    - .idea/**
+    - node_modules/**
+
+custom:
+  pythonRequirements:
+    layer: true
+    slim: true
+  apiGatewayServiceProxies:
+    - sqs:
+        path: /sqs
+        method: post
+        queueName: !GetAtt MyQueue.QueueName
+        cors: true
+functions:
+  hello:
+    environment:
+      token: ${ssm:/tg/token~true}
+    handler: handler.hello
+    layers:
+      - { Ref: PythonRequirementsLambdaLayer }
+    reservedConcurrency: 1
+    events:
+      - sqs:
+          arn: !GetAtt MyQueue.Arn
+
+resources:
+  Resources:
+    MyQueue:
+      Type: "AWS::SQS::Queue"
+      Properties:
+        QueueName: "EventQueue"
+
+plugins:
+  - serverless-pseudo-parameters
+  - serverless-python-requirements
+  - serverless-apigateway-service-proxy
